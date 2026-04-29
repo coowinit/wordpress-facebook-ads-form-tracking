@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WordPress 表单 Facebook 广告来源追踪指南</title>
+  <meta name="description" content="一个用于 WordPress 自定义表单的 Facebook / Meta 广告询盘来源追踪方案，可在邮件中显示 Facebook Ads: Yes/No。" />
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --primary: #651e7c;
+      --primary-dark: #4b145d;
+      --border: #e5e7eb;
+      --code-bg: #111827;
+      --code-text: #e5e7eb;
+      --soft: #faf5ff;
+      --success: #ecfdf5;
+      --warning: #fffbeb;
+      --shadow: 0 14px 35px rgba(17, 24, 39, 0.08);
+      --radius: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(101, 30, 124, 0.12), transparent 32%),
+        radial-gradient(circle at top right, rgba(99, 102, 241, 0.12), transparent 30%),
+        var(--bg);
+      line-height: 1.75;
+    }
+
+    a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 20px 72px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, var(--primary), #8b35a7);
+      color: #fff;
+      padding: 56px 42px;
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -90px;
+      top: -90px;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.12);
+    }
+
+    .hero h1 {
+      position: relative;
+      z-index: 1;
+      margin: 0 0 18px;
+      font-size: clamp(30px, 5vw, 52px);
+      line-height: 1.18;
+      letter-spacing: -0.04em;
+    }
+
+    .hero p {
+      position: relative;
+      z-index: 1;
+      max-width: 850px;
+      margin: 0;
+      color: rgba(255,255,255,0.9);
+      font-size: 18px;
+    }
+
+    .hero .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding: 7px 14px;
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      font-size: 14px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 26px;
+      margin-top: 28px;
+      align-items: start;
+    }
+
+    .toc {
+      position: sticky;
+      top: 18px;
+      background: rgba(255,255,255,0.86);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .toc h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+    }
+
+    .toc a {
+      display: block;
+      padding: 8px 10px;
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .toc a:hover {
+      color: var(--primary);
+      background: var(--soft);
+      text-decoration: none;
+    }
+
+    main {
+      display: grid;
+      gap: 22px;
+    }
+
+    section,
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 30px;
+      box-shadow: var(--shadow);
+    }
+
+    h2 {
+      margin: 0 0 18px;
+      font-size: 28px;
+      line-height: 1.25;
+      letter-spacing: -0.02em;
+    }
+
+    h3 {
+      margin: 28px 0 12px;
+      font-size: 20px;
+      line-height: 1.35;
+    }
+
+    p {
+      margin: 0 0 14px;
+    }
+
+    ul,
+    ol {
+      margin: 10px 0 0;
+      padding-left: 24px;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid.cols-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .mini-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+    }
+
+    .mini-card strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--primary);
+    }
+
+    .note {
+      padding: 16px 18px;
+      border-radius: 14px;
+      border: 1px solid #eadcff;
+      background: var(--soft);
+      color: #4c1d60;
+      margin: 16px 0;
+    }
+
+    .success {
+      background: var(--success);
+      border-color: #bbf7d0;
+      color: #166534;
+    }
+
+    .warning {
+      background: var(--warning);
+      border-color: #fde68a;
+      color: #92400e;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.94em;
+    }
+
+    .code-block {
+      position: relative;
+      margin: 16px 0;
+      border-radius: 16px;
+      overflow: hidden;
+      background: var(--code-bg);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .code-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      color: #d1d5db;
+      background: rgba(255,255,255,0.06);
+      font-size: 13px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .copy-btn {
+      border: 0;
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      border-radius: 9px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .copy-btn:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    pre {
+      margin: 0;
+      padding: 18px;
+      overflow: auto;
+      color: var(--code-text);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      overflow: hidden;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+    }
+
+    th,
+    td {
+      padding: 13px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th {
+      background: #f9fafb;
+      color: #374151;
+      font-weight: 700;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .flow-step {
+      background: #f9fafb;
+      border: 1px solid var(--border);
+      border-radius: 15px;
+      padding: 16px;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .flow-step span {
+      display: inline-grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      margin-bottom: 10px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .footer {
+      text-align: center;
+      color: var(--muted);
+      padding: 32px 0 0;
+      font-size: 14px;
+    }
+
+    @media (max-width: 920px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .toc {
+        position: static;
+      }
+
+      .grid.cols-3,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        padding: 42px 26px;
+      }
+
+      section,
+      .card {
+        padding: 24px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .page {
+        padding: 18px 14px 56px;
+      }
+
+      .hero h1 {
+        font-size: 30px;
+      }
+
+      .hero p {
+        font-size: 16px;
+      }
+
+      h2 {
+        font-size: 24px;
+      }
+
+      pre {
+        font-size: 13px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <div class="tag">轻量方案 · 只用 fb_ads=1</div>
+      <h1>WordPress 表单 Facebook 广告来源追踪指南</h1>
+      <p>
+        这是一个适用于 WordPress 自定义主题表单的简化追踪方案。用户从 Facebook / Meta 广告进入网站并提交表单后，询盘邮件中显示 <strong>Facebook Ads: Yes</strong>；非广告来源则显示 <strong>Facebook Ads: No</strong>。
+      </p>
+    </header>
+
+    <div class="layout">
+      <aside class="toc">
+        <h2>目录</h2>
+        <a href="#goal">目标</a>
+        <a href="#principle">实现原理</a>
+        <a href="#ad-parameter">广告参数</a>
+        <a href="#email-result">邮件效果</a>
+        <a href="#functions">functions.php 代码</a>
+        <a href="#form">表单隐藏字段</a>
+        <a href="#ajax">Ajax 提交</a>
+        <a href="#php">PHP 邮件处理</a>
+        <a href="#test">测试方法</a>
+        <a href="#faq">常见问题</a>
+        <a href="#reuse">复用步骤</a>
+      </aside>
+
+      <main>
+        <section id="goal">
+          <h2>一、目标</h2>
+          <p>这个方案的目标不是做复杂的广告归因，而是解决一个非常实际的问题：</p>
+          <div class="note">
+            在收到 WordPress 表单询盘邮件时，能够快速判断这个询盘是不是 Facebook 广告带来的。
+          </div>
+
+          <div class="grid cols-3">
+            <div class="mini-card">
+              <strong>简单</strong>
+              只需要一个 URL 参数：<code>fb_ads=1</code>。
+            </div>
+            <div class="mini-card">
+              <strong>直观</strong>
+              邮件中直接显示：<code>Facebook Ads: Yes/No</code>。
+            </div>
+            <div class="mini-card">
+              <strong>跨页面</strong>
+              用户从广告页跳转到联系页后仍然可以识别来源。
+            </div>
+          </div>
+        </section>
+
+        <section id="principle">
+          <h2>二、实现原理</h2>
+          <p>广告落地页 URL 中添加 <code>fb_ads=1</code>。当用户访问带有这个参数的页面时，全站 JavaScript 会把广告来源状态保存到浏览器的 <code>localStorage</code> 中。</p>
+
+          <div class="flow">
+            <div class="flow-step"><span>1</span><br>点击 Facebook 广告</div>
+            <div class="flow-step"><span>2</span><br>进入带 fb_ads=1 的页面</div>
+            <div class="flow-step"><span>3</span><br>JS 保存广告来源</div>
+            <div class="flow-step"><span>4</span><br>用户跳转到表单页</div>
+            <div class="flow-step"><span>5</span><br>邮件显示 Yes</div>
+          </div>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>用户访问路径示例</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>1. 用户点击 Facebook 广告
+2. 进入 https://www.example.com/product-page/?fb_ads=1
+3. 浏览其他页面
+4. 进入 https://www.example.com/contact-us/
+5. 提交表单
+6. 邮件中显示 Facebook Ads: Yes</code></pre>
+          </div>
+        </section>
+
+        <section id="ad-parameter">
+          <h2>三、Meta / Facebook 广告参数设置</h2>
+          <p>如果你的广告落地页是：</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>原始落地页</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>https://www.example.com/contact-us/</code></pre>
+          </div>
+
+          <p>完整 URL 可以写成：</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>带参数的落地页</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>https://www.example.com/contact-us/?fb_ads=1</code></pre>
+          </div>
+
+          <p>如果 Meta 广告后台有单独的 <strong>URL Parameters</strong> 输入框，只需要填写：</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>URL Parameters</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>fb_ads=1</code></pre>
+          </div>
+
+          <div class="note success">
+            不需要填写复杂的 UTM 参数。如果只想在邮件里判断是否来自 Facebook 广告，<code>fb_ads=1</code> 已经足够。
+          </div>
+        </section>
+
+        <section id="email-result">
+          <h2>四、最终邮件显示效果</h2>
+
+          <h3>Facebook 广告来的询盘</h3>
+          <div class="code-block">
+            <div class="code-title">
+              <span>邮件内容示例</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>Facebook Ads: Yes
+First Landing Page: https://www.example.com/product-page/?fb_ads=1
+Facebook Ads Landing Page: https://www.example.com/product-page/?fb_ads=1
+Submitted Page URL: https://www.example.com/contact-us/</code></pre>
+          </div>
+
+          <h3>非 Facebook 广告来的询盘</h3>
+          <div class="code-block">
+            <div class="code-title">
+              <span>邮件内容示例</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>Facebook Ads: No
+First Landing Page: https://www.example.com/contact-us/
+Facebook Ads Landing Page:
+Submitted Page URL: https://www.example.com/contact-us/</code></pre>
+          </div>
+        </section>
+
+        <section id="functions">
+          <h2>五、在 functions.php 中加入全站追踪脚本</h2>
+          <p>将以下代码添加到主题的 <code>functions.php</code> 文件中。建议放在表单相关函数附近，或者文件底部。</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>functions.php</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>&lt;?php
+/**
+ * 全站记录 Facebook 广告来源
+ *
+ * 广告链接示例：
+ * https://www.example.com/contact-us/?fb_ads=1
+ */
+add_action('wp_footer', 'theme_output_fb_ads_tracking_script');
+
+function theme_output_fb_ads_tracking_script() {
+    if (is_admin()) {
+        return;
+    }
+    ?&gt;
+    &lt;script&gt;
+    (function () {
+        var params = new URLSearchParams(window.location.search);
+        var hasFbAdsParam = params.get('fb_ads') === '1';
+        var currentUrl = window.location.href;
+
+        // 记录用户第一次进入网站的页面
+        if (!localStorage.getItem('first_landing_page')) {
+            localStorage.setItem('first_landing_page', currentUrl);
+        }
+
+        // 如果当前页面 URL 中带有 fb_ads=1，则标记为 Facebook 广告来源
+        if (hasFbAdsParam) {
+            localStorage.setItem('facebook_ads', 'Yes');
+            localStorage.setItem('fb_ads_landing_page', currentUrl);
+        } else if (!localStorage.getItem('facebook_ads')) {
+            localStorage.setItem('facebook_ads', 'No');
+        }
+
+        function setField(id, value) {
+            var field = document.getElementById(id);
+            if (field) {
+                field.value = value || '';
+            }
+        }
+
+        // 自动填充表单隐藏字段
+        setField('facebook_ads', localStorage.getItem('facebook_ads') || 'No');
+        setField('first_landing_page', localStorage.getItem('first_landing_page') || '');
+        setField('fb_ads_landing_page', localStorage.getItem('fb_ads_landing_page') || '');
+    })();
+    &lt;/script&gt;
+    &lt;?php
+}</code></pre>
+          </div>
+
+          <div class="note">
+            脚本要放到 <code>functions.php</code> 中通过 <code>wp_footer</code> 全站输出。这样用户第一次进入产品页、首页或其他落地页时，都能立即记录 <code>fb_ads=1</code>。
+          </div>
+        </section>
+
+        <section id="form">
+          <h2>六、在表单页面加入隐藏字段</h2>
+          <p>在表单提交按钮之前加入以下隐藏字段：</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>隐藏字段</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>&lt;input type="hidden" name="facebook_ads" id="facebook_ads" value="No"&gt;
+&lt;input type="hidden" name="first_landing_page" id="first_landing_page"&gt;
+&lt;input type="hidden" name="fb_ads_landing_page" id="fb_ads_landing_page"&gt;</code></pre>
+          </div>
+
+          <h3>表单示例</h3>
+          <div class="code-block">
+            <div class="code-title">
+              <span>contact form</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>&lt;form id="contactus" class="mb-4"&gt;
+    &lt;!-- 其他表单字段 --&gt;
+
+    &lt;input type="hidden" name="facebook_ads" id="facebook_ads" value="No"&gt;
+    &lt;input type="hidden" name="first_landing_page" id="first_landing_page"&gt;
+    &lt;input type="hidden" name="fb_ads_landing_page" id="fb_ads_landing_page"&gt;
+
+    &lt;button type="submit" class="btn btn-primary"&gt;Submit&lt;/button&gt;
+&lt;/form&gt;</code></pre>
+          </div>
+
+          <div class="note success">
+            如果你的表单使用 <code>$form.serializeArray()</code> 收集字段，新增的隐藏字段会自动随表单一起提交。
+          </div>
+        </section>
+
+        <section id="ajax">
+          <h2>七、Ajax 提交时保留最终提交页面 URL</h2>
+          <p>如果你的 Ajax 里已经有类似代码，可以保留：</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>保留最终提交页面 URL</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>formData.push({ name: 'page_url', value: window.location.href });</code></pre>
+          </div>
+
+          <h3>Ajax 示例</h3>
+          <div class="code-block">
+            <div class="code-title">
+              <span>jQuery Ajax</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>jQuery(function($){
+    $('#contactus').on('submit', function(e){
+        e.preventDefault();
+
+        var $form = $(this);
+        var $btn  = $form.find('button[type="submit"]');
+
+        if ($btn.prop('disabled')) {
+            return;
+        }
+
+        var formData = $form.serializeArray();
+        formData.push({ name: 'action', value: 'send_contact_us_email' });
+        formData.push({ name: 'page_url', value: window.location.href });
+
+        $.ajax({
+            url: '&lt;?php echo esc_url(admin_url('admin-ajax.php')); ?&gt;',
+            type: 'POST',
+            dataType: 'json',
+            data: $.param(formData),
+            beforeSend: function(){
+                $btn.prop('disabled', true).text('Sending...');
+            },
+            success: function(res){
+                if (res.success) {
+                    alert(res.data.msg || 'Submitted successfully.');
+                    $form[0].reset();
+                } else {
+                    alert(res.data && res.data.msg ? res.data.msg : 'Submission failed.');
+                }
+            },
+            error: function(){
+                alert('Network or server error, please try again later.');
+            },
+            complete: function(){
+                $btn.prop('disabled', false).text('Submit');
+            }
+        });
+    });
+});</code></pre>
+          </div>
+        </section>
+
+        <section id="php">
+          <h2>八、在 PHP 邮件函数中接收并输出字段</h2>
+
+          <h3>接收字段</h3>
+          <div class="code-block">
+            <div class="code-title">
+              <span>PHP 接收字段</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>$facebook_ads        = sanitize_text_field($_POST['facebook_ads'] ?? 'No');
+$first_landing_page  = esc_url_raw($_POST['first_landing_page'] ?? '');
+$fb_ads_landing_page = esc_url_raw($_POST['fb_ads_landing_page'] ?? '');
+$page_url            = esc_url_raw($_POST['page_url'] ?? '');
+
+$facebook_ads = ($facebook_ads === 'Yes') ? 'Yes' : 'No';</code></pre>
+          </div>
+
+          <h3>加入邮件正文</h3>
+          <div class="code-block">
+            <div class="code-title">
+              <span>邮件正文追加字段</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>$body .= ''
+    . '&lt;br&gt;'
+    . '&lt;p&gt;&lt;strong&gt;Facebook Ads:&lt;/strong&gt; ' . esc_html($facebook_ads) . '&lt;/p&gt;'
+    . '&lt;p&gt;&lt;strong&gt;First Landing Page:&lt;/strong&gt; '
+    . ($first_landing_page ? '&lt;a href="' . esc_url($first_landing_page) . '" target="_blank"&gt;' . esc_html($first_landing_page) . '&lt;/a&gt;' : '')
+    . '&lt;/p&gt;'
+    . '&lt;p&gt;&lt;strong&gt;Facebook Ads Landing Page:&lt;/strong&gt; '
+    . ($fb_ads_landing_page ? '&lt;a href="' . esc_url($fb_ads_landing_page) . '" target="_blank"&gt;' . esc_html($fb_ads_landing_page) . '&lt;/a&gt;' : '')
+    . '&lt;/p&gt;'
+    . '&lt;p&gt;&lt;strong&gt;Submitted Page URL:&lt;/strong&gt; '
+    . ($page_url ? '&lt;a href="' . esc_url($page_url) . '" target="_blank"&gt;' . esc_html($page_url) . '&lt;/a&gt;' : '')
+    . '&lt;/p&gt;';</code></pre>
+          </div>
+
+          <h3>推荐邮件字段结构</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>字段</th>
+                <th>含义</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Facebook Ads</td>
+                <td>是否来自 Facebook 广告</td>
+              </tr>
+              <tr>
+                <td>First Landing Page</td>
+                <td>用户第一次进入网站的页面</td>
+              </tr>
+              <tr>
+                <td>Facebook Ads Landing Page</td>
+                <td>带有 <code>fb_ads=1</code> 的广告落地页</td>
+              </tr>
+              <tr>
+                <td>Submitted Page URL</td>
+                <td>用户最终提交表单的页面</td>
+              </tr>
+              <tr>
+                <td>Submitted At</td>
+                <td>表单提交时间</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="test">
+          <h2>九、测试方法</h2>
+
+          <h3>测试 1：直接在 Contact 页面提交</h3>
+          <div class="code-block">
+            <div class="code-title">
+              <span>访问链接</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>https://www.example.com/contact-us/?fb_ads=1</code></pre>
+          </div>
+
+          <p>提交表单后，邮件中应该显示：</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>预期结果</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>Facebook Ads: Yes
+First Landing Page: https://www.example.com/contact-us/?fb_ads=1
+Facebook Ads Landing Page: https://www.example.com/contact-us/?fb_ads=1
+Submitted Page URL: https://www.example.com/contact-us/?fb_ads=1</code></pre>
+          </div>
+
+          <h3>测试 2：先进入产品页，再进入 Contact 页面</h3>
+          <div class="code-block">
+            <div class="code-title">
+              <span>访问路径</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>1. 打开 https://www.example.com/product-page/?fb_ads=1
+2. 再进入 https://www.example.com/contact-us/
+3. 提交表单</code></pre>
+          </div>
+
+          <p>邮件中应该显示：</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>预期结果</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>Facebook Ads: Yes
+First Landing Page: https://www.example.com/product-page/?fb_ads=1
+Facebook Ads Landing Page: https://www.example.com/product-page/?fb_ads=1
+Submitted Page URL: https://www.example.com/contact-us/</code></pre>
+          </div>
+
+          <h3>测试 3：普通访问</h3>
+          <div class="code-block">
+            <div class="code-title">
+              <span>普通访问</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>https://www.example.com/contact-us/</code></pre>
+          </div>
+
+          <p>邮件中应该显示：</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>预期结果</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>Facebook Ads: No</code></pre>
+          </div>
+
+          <div class="note warning">
+            测试时建议使用无痕窗口。因为本方案使用 <code>localStorage</code>，如果你之前访问过带 <code>fb_ads=1</code> 的链接，浏览器会一直记住 <code>Facebook Ads: Yes</code>。
+          </div>
+
+          <h3>清除测试记录</h3>
+          <div class="code-block">
+            <div class="code-title">
+              <span>浏览器控制台执行</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>localStorage.removeItem('facebook_ads');
+localStorage.removeItem('first_landing_page');
+localStorage.removeItem('fb_ads_landing_page');</code></pre>
+          </div>
+        </section>
+
+        <section id="faq">
+          <h2>十、常见问题</h2>
+
+          <h3>1. 只用 fb_ads=1，不用 UTM，可以吗？</h3>
+          <p>可以。如果只是为了在邮箱里判断是否来自 Facebook 广告，<code>fb_ads=1</code> 已经足够。</p>
+
+          <h3>2. 这个能区分具体广告系列、广告组、广告名称吗？</h3>
+          <p>不能。这个方案只判断是否来自 Facebook 广告。如果后期需要区分具体广告系列，可以升级为 UTM 方案。</p>
+
+          <h3>3. 用户跳转多个页面后还能识别吗？</h3>
+          <p>可以。因为广告标记会保存到 <code>localStorage</code>。只要用户使用同一个浏览器，并且没有清除浏览器数据，后续进入 Contact 页面提交表单仍然可以识别。</p>
+
+          <h3>4. 用户换浏览器或换设备后还能识别吗？</h3>
+          <p>不能。<code>localStorage</code> 只保存在当前浏览器和当前设备中。</p>
+
+          <h3>5. 这个能替代 Meta Pixel 吗？</h3>
+          <p>不能完全替代。这个方案主要用于在询盘邮件中标记来源，方便人工查看。Meta Pixel 更适合做广告后台转化归因、再营销和广告优化。</p>
+        </section>
+
+        <section id="reuse">
+          <h2>十一、后期添加到其他网站的步骤</h2>
+          <ol>
+            <li>在 Facebook / Meta 广告链接中添加 <code>fb_ads=1</code>。</li>
+            <li>在目标 WordPress 主题的 <code>functions.php</code> 中加入全站追踪脚本。</li>
+            <li>在表单页面加入 3 个隐藏字段。</li>
+            <li>确认 Ajax 提交时包含 <code>page_url</code>。</li>
+            <li>在 PHP 邮件函数中接收字段。</li>
+            <li>在邮件正文中输出 Facebook 来源信息。</li>
+            <li>使用无痕窗口进行测试。</li>
+          </ol>
+
+          <div class="note success">
+            复用到新网站时，只需要重点检查三处：广告链接是否带 <code>fb_ads=1</code>、表单是否有隐藏字段、邮件函数是否输出 <code>Facebook Ads</code>。
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="footer">
+      WordPress 表单 Facebook 广告来源追踪指南 · 单文件 HTML 页面
+    </footer>
+  </div>
+
+  <script>
+    document.querySelectorAll('[data-copy]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var code = button.closest('.code-block').querySelector('code');
+        if (!code) return;
+
+        var text = code.innerText;
+
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(text).then(function () {
+            var oldText = button.innerText;
+            button.innerText = '已复制';
+            setTimeout(function () {
+              button.innerText = oldText;
+            }, 1200);
+          });
+        } else {
+          var textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.style.position = 'fixed';
+          textarea.style.left = '-9999px';
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          try {
+            document.execCommand('copy');
+            var oldTextFallback = button.innerText;
+            button.innerText = '已复制';
+            setTimeout(function () {
+              button.innerText = oldTextFallback;
+            }, 1200);
+          } catch (err) {}
+          document.body.removeChild(textarea);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
