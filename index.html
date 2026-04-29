@@ -410,7 +410,7 @@
 <body>
   <div class="page">
     <header class="hero">
-      <div class="tag">轻量方案 · 只用 fb_ads=1</div>
+      <div class="tag">最终增强版 · fb_ads=1 · Session 兜底</div>
       <h1>WordPress 表单 Facebook 广告来源追踪指南</h1>
       <p>
         这是一个适用于 WordPress 自定义主题表单的简化追踪方案。用户从 Facebook / Meta 广告进入网站并提交表单后，询盘邮件中显示 <strong>Facebook Ads: Yes</strong>；非广告来源则显示 <strong>Facebook Ads: No</strong>。
@@ -425,6 +425,9 @@
         <a href="#ad-parameter">广告参数</a>
         <a href="#email-result">邮件效果</a>
         <a href="#functions">functions.php 代码</a>
+        <a href="#server-fallback">服务器端兜底</a>
+        <a href="#unified-helper">统一邮件函数</a>
+        <a href="#final-checklist">最终检查清单</a>
         <a href="#form">表单隐藏字段</a>
         <a href="#ajax">Ajax 提交</a>
         <a href="#custom-formdata">特殊表单 / JS 缓存</a>
@@ -460,12 +463,12 @@
 
         <section id="principle">
           <h2>二、实现原理</h2>
-          <p>广告落地页 URL 中添加 <code>fb_ads=1</code>。当用户访问带有这个参数的页面时，全站 JavaScript 会把广告来源状态保存到浏览器的 <code>localStorage</code> 中。</p>
+          <p>广告落地页 URL 中添加 <code>fb_ads=1</code>。当用户访问带有这个参数的页面时，全站 JavaScript 会把广告来源状态保存到浏览器的 <code>sessionStorage</code> 中，并通过 PHP Session 做服务器端兜底。</p>
 
           <div class="flow">
             <div class="flow-step"><span>1</span><br>点击 Facebook 广告</div>
             <div class="flow-step"><span>2</span><br>进入带 fb_ads=1 的页面</div>
-            <div class="flow-step"><span>3</span><br>JS 保存广告来源</div>
+            <div class="flow-step"><span>3</span><br>前端保存来源</div>
             <div class="flow-step"><span>4</span><br>用户跳转到表单页</div>
             <div class="flow-step"><span>5</span><br>邮件显示 Yes</div>
           </div>
@@ -613,6 +616,59 @@ function theme_output_fb_ads_tracking_script() {
           </div>
         </section>
 
+
+        <section id="server-fallback">
+          <h2>五补充：服务器端 Session 兜底</h2>
+          <p>除了前端 <code>sessionStorage</code>，也建议在 PHP 端记录一次来源。这样即使部分 Ajax 表单漏传隐藏字段，后台仍然可以尝试识别 <code>fb_ads=1</code>。</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>启用 PHP Session</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>add_action('init', 'theme_start_session', 1);
+
+function theme_start_session() {
+    if (!session_id()) {
+        session_start();
+    }
+}</code></pre>
+          </div>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>服务器端记录 fb_ads=1</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>add_action('init', 'theme_capture_fb_ads_tracking_server_side', 2);
+
+function theme_capture_fb_ads_tracking_server_side() {
+    if (is_admin()) {
+        return;
+    }
+
+    if (!isset($_SESSION) || !is_array($_SESSION)) {
+        return;
+    }
+
+    $current_url = esc_url_raw(home_url(add_query_arg(array(), $_SERVER['REQUEST_URI'] ?? '/')));
+
+    if (empty($_SESSION['theme_first_landing_page'])) {
+        $_SESSION['theme_first_landing_page'] = $current_url;
+    }
+
+    if (isset($_GET['fb_ads']) && sanitize_text_field(wp_unslash($_GET['fb_ads'])) === '1') {
+        $_SESSION['theme_facebook_ads'] = 'Yes';
+        $_SESSION['theme_fb_ads_landing_page'] = $current_url;
+    }
+}</code></pre>
+          </div>
+
+          <div class="note success">
+            如果你的主题已经因为购物车功能启用了 Session，可以直接复用，无需重复添加 <code>session_start()</code>。
+          </div>
+        </section>
+
         <section id="form">
           <h2>六、在表单页面加入隐藏字段</h2>
           <p>在表单提交按钮之前加入以下隐藏字段：</p>
@@ -733,7 +789,7 @@ function theme_output_fb_ads_tracking_script() {
     return field ? field.value : '';
   }
 
-  const globalTracking = window.evodekFbAdsTracking || {};
+  const globalTracking = window.themeFbAdsTracking || window.evodekFbAdsTracking || {};
 
   return {
     facebook_ads:
@@ -938,6 +994,68 @@ $facebook_ads = ($facebook_ads === 'Yes') ? 'Yes' : 'No';</code></pre>
           </table>
         </section>
 
+
+        <section id="unified-helper">
+          <h2>八补充：统一 PHP 邮件输出函数</h2>
+          <p>建议把 Facebook Ads 邮件区块封装成一个统一函数，然后所有表单邮件都调用它。这样 Contact、购物车、计算器、免费样品页都能保持一致。</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>统一邮件输出函数</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>function theme_get_fb_ads_tracking_data_from_post() {
+    $posted_facebook_ads        = sanitize_text_field($_POST['facebook_ads'] ?? 'No');
+    $posted_first_landing_page  = esc_url_raw($_POST['first_landing_page'] ?? '');
+    $posted_fb_ads_landing_page = esc_url_raw($_POST['fb_ads_landing_page'] ?? '');
+    $posted_page_url            = esc_url_raw($_POST['page_url'] ?? '');
+
+    $session_facebook_ads        = sanitize_text_field($_SESSION['theme_facebook_ads'] ?? 'No');
+    $session_first_landing_page  = esc_url_raw($_SESSION['theme_first_landing_page'] ?? '');
+    $session_fb_ads_landing_page = esc_url_raw($_SESSION['theme_fb_ads_landing_page'] ?? '');
+
+    $first_landing_page  = $posted_first_landing_page ?: $session_first_landing_page;
+    $fb_ads_landing_page = $posted_fb_ads_landing_page ?: $session_fb_ads_landing_page;
+    $facebook_ads = ($posted_facebook_ads === 'Yes' || $session_facebook_ads === 'Yes') ? 'Yes' : 'No';
+
+    $combined_urls = $posted_page_url . ' ' . $first_landing_page . ' ' . $fb_ads_landing_page;
+    if ($facebook_ads !== 'Yes' && strpos($combined_urls, 'fb_ads=1') !== false) {
+        $facebook_ads = 'Yes';
+        if (!$fb_ads_landing_page) {
+            $fb_ads_landing_page = $posted_page_url ?: $first_landing_page;
+        }
+    }
+
+    return [
+        'facebook_ads'        => $facebook_ads,
+        'first_landing_page'  => $first_landing_page,
+        'fb_ads_landing_page' => $fb_ads_landing_page,
+    ];
+}
+
+function theme_get_fb_ads_tracking_email_html() {
+    $tracking = theme_get_fb_ads_tracking_data_from_post();
+
+    return ''
+        . '&lt;hr&gt;'
+        . '&lt;h3&gt;Facebook Ads Tracking&lt;/h3&gt;'
+        . '&lt;p&gt;&lt;strong&gt;Facebook Ads:&lt;/strong&gt; ' . esc_html($tracking['facebook_ads']) . '&lt;/p&gt;'
+        . theme_render_email_url_line('First Landing Page', $tracking['first_landing_page'])
+        . theme_render_email_url_line('Facebook Ads Landing Page', $tracking['fb_ads_landing_page']);
+}</code></pre>
+          </div>
+
+          <p>邮件正文中只需要加入：</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>邮件正文调用</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>. theme_get_fb_ads_tracking_email_html()</code></pre>
+          </div>
+        </section>
+
         <section id="test">
           <h2>九、测试方法</h2>
 
@@ -1064,11 +1182,31 @@ sessionStorage.removeItem('fb_ads_landing_page');</code></pre>
             复用到新网站时，只需要重点检查三处：广告链接是否带 <code>fb_ads=1</code>、表单是否有隐藏字段、邮件函数是否输出 <code>Facebook Ads</code>。
           </div>
         </section>
+
+        <section id="final-checklist">
+          <h2>十二补充：最终检查清单</h2>
+          <ol>
+            <li>Facebook / Meta 广告链接是否带有 <code>fb_ads=1</code>。</li>
+            <li>主题是否已经启用 PHP Session。</li>
+            <li><code>functions.php</code> 是否有服务器端兜底记录逻辑。</li>
+            <li>全站 <code>wp_footer</code> 脚本是否能正常输出。</li>
+            <li>表单隐藏字段是否存在，或者是否能自动注入。</li>
+            <li>所有邮件正文是否调用统一的 Facebook Ads 邮件输出函数。</li>
+            <li>普通 Ajax 表单是否使用 <code>serializeArray()</code> 或 <code>FormData(form)</code>。</li>
+            <li>手动 <code>new FormData()</code> 的表单是否手动 append 了 3 个字段。</li>
+            <li>独立 JS 更新后是否刷新版本号或使用 <code>filemtime()</code>。</li>
+            <li>是否用无痕窗口分别测试广告流量和普通流量。</li>
+          </ol>
+          <div class="note warning">
+            如果 <code>functions.php</code> 中包含 SMTP 邮箱、授权码或 API Key，不要上传到公开 GitHub 仓库。
+          </div>
+        </section>
+
       </main>
     </div>
 
     <footer class="footer">
-      WordPress 表单 Facebook 广告来源追踪指南 · 单文件 HTML 页面
+      WordPress 表单 Facebook 广告来源追踪指南 · 最终增强版
     </footer>
   </div>
 

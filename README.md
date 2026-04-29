@@ -46,7 +46,7 @@ https://www.example.com/contact-us/?fb_ads=1
 https://www.example.com/product-page/?fb_ads=1
 ```
 
-当用户访问带有 `fb_ads=1` 的页面时，前端 JavaScript 会把来源信息保存到浏览器的 `localStorage` 中。
+当用户访问带有 `fb_ads=1` 的页面时，前端 JavaScript 会把来源信息保存到浏览器的 `sessionStorage` 中；为了兼容旧版本，也可以同时读取 `localStorage`。
 
 这样即使用户不是在广告落地页直接提交表单，而是先浏览其他页面，再进入 Contact 页面提交表单，也仍然可以识别为 Facebook 广告来源。
 
@@ -60,6 +60,118 @@ https://www.example.com/product-page/?fb_ads=1
 5. 提交表单
 6. 邮件中显示 Facebook Ads: Yes
 ```
+
+
+### 最终增强版推荐架构
+
+经过多表单测试后，推荐使用下面这套更稳的组合：
+
+| 模块 | 作用 |
+|---|---|
+| 前端 `sessionStorage` | 记录本次浏览会话中的 Facebook 广告来源 |
+| 全站 `wp_footer` 脚本 | 自动给页面里的所有表单补充隐藏字段 |
+| `window.evodekFbAdsTracking` | 给免费样品页、多步骤表单、手动 `new FormData()` 的 JS 读取使用 |
+| PHP Session | 服务器端兜底，防止部分表单漏传隐藏字段 |
+| 统一邮件函数 | 所有表单邮件统一输出 `Facebook Ads Tracking` 区块 |
+
+这种方式可以覆盖：
+
+- Contact Us / 代理商表单
+- 购物车提交表单
+- Decking Calculator 表单
+- Cladding Calculator 表单
+- Free Samples 免费样品多步骤表单
+
+---
+
+## 增强版：服务器端 PHP Session 兜底
+
+如果主题里已经有购物车功能，并且已经启用了 PHP Session，可以直接复用。
+
+如果没有，可以先添加：
+
+```php
+add_action('init', 'theme_start_session', 1);
+
+function theme_start_session() {
+    if (!session_id()) {
+        session_start();
+    }
+}
+```
+
+然后添加服务器端兜底记录：
+
+```php
+add_action('init', 'theme_capture_fb_ads_tracking_server_side', 2);
+
+function theme_capture_fb_ads_tracking_server_side() {
+    if (is_admin()) {
+        return;
+    }
+
+    if (!isset($_SESSION) || !is_array($_SESSION)) {
+        return;
+    }
+
+    $current_url = esc_url_raw(home_url(add_query_arg(array(), $_SERVER['REQUEST_URI'] ?? '/')));
+
+    if (empty($_SESSION['theme_first_landing_page'])) {
+        $_SESSION['theme_first_landing_page'] = $current_url;
+    }
+
+    if (isset($_GET['fb_ads']) && sanitize_text_field(wp_unslash($_GET['fb_ads'])) === '1') {
+        $_SESSION['theme_facebook_ads'] = 'Yes';
+        $_SESSION['theme_fb_ads_landing_page'] = $current_url;
+    }
+}
+```
+
+这一步的作用是：即使某个 Ajax 表单没有把隐藏字段提交到后台，PHP 仍然可以尝试从 Session 中识别广告来源。
+
+---
+
+## 增强版：自动给所有表单补隐藏字段
+
+如果网站有很多表单页面，不想每个页面手动添加隐藏域，可以让全站脚本自动补充字段。
+
+核心逻辑如下：
+
+```js
+var trackingFieldNames = [
+  'facebook_ads',
+  'first_landing_page',
+  'fb_ads_landing_page'
+];
+
+function ensureTrackingFieldsInForms() {
+  var forms = document.querySelectorAll('form');
+
+  forms.forEach(function (form) {
+    trackingFieldNames.forEach(function (name) {
+      if (!form.querySelector('[name="' + name + '"]')) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.className = 'theme-fb-ads-tracking-field';
+        form.appendChild(input);
+      }
+    });
+  });
+}
+```
+
+同时建议在全站脚本里暴露一个全局对象：
+
+```js
+window.evodekFbAdsTracking = {
+  facebook_ads: facebookAds,
+  first_landing_page: firstLandingPage,
+  fb_ads_landing_page: fbAdsLandingPage
+};
+```
+
+这样免费样品页这类独立 JS 文件也能读取到广告来源数据。
 
 ---
 
@@ -315,7 +427,7 @@ function getFbAdsTrackingData() {
     return field ? field.value : '';
   }
 
-  const globalTracking = window.evodekFbAdsTracking || {};
+  const globalTracking = window.themeFbAdsTracking || window.evodekFbAdsTracking || {};
 
   return {
     facebook_ads:
@@ -460,6 +572,75 @@ function theme_enqueue_sample_request_script() {
 3. 使用无痕窗口测试。
 4. 如果网站有缓存插件或 CDN，清理页面缓存和静态资源缓存。
 
+
+---
+
+## 增强版：统一 PHP 邮件输出函数
+
+建议把 Facebook Ads 邮件输出封装成统一函数，然后所有表单邮件都调用它。
+
+```php
+function theme_get_fb_ads_tracking_data_from_post() {
+    $posted_facebook_ads        = sanitize_text_field($_POST['facebook_ads'] ?? 'No');
+    $posted_first_landing_page  = esc_url_raw($_POST['first_landing_page'] ?? '');
+    $posted_fb_ads_landing_page = esc_url_raw($_POST['fb_ads_landing_page'] ?? '');
+    $posted_page_url            = esc_url_raw($_POST['page_url'] ?? '');
+
+    $session_facebook_ads        = sanitize_text_field($_SESSION['theme_facebook_ads'] ?? 'No');
+    $session_first_landing_page  = esc_url_raw($_SESSION['theme_first_landing_page'] ?? '');
+    $session_fb_ads_landing_page = esc_url_raw($_SESSION['theme_fb_ads_landing_page'] ?? '');
+
+    $first_landing_page  = $posted_first_landing_page ?: $session_first_landing_page;
+    $fb_ads_landing_page = $posted_fb_ads_landing_page ?: $session_fb_ads_landing_page;
+
+    $facebook_ads = ($posted_facebook_ads === 'Yes' || $session_facebook_ads === 'Yes') ? 'Yes' : 'No';
+
+    $combined_urls = $posted_page_url . ' ' . $first_landing_page . ' ' . $fb_ads_landing_page;
+    if ($facebook_ads !== 'Yes' && strpos($combined_urls, 'fb_ads=1') !== false) {
+        $facebook_ads = 'Yes';
+
+        if (!$fb_ads_landing_page) {
+            $fb_ads_landing_page = $posted_page_url ?: $first_landing_page;
+        }
+    }
+
+    return [
+        'facebook_ads'        => $facebook_ads,
+        'first_landing_page'  => $first_landing_page,
+        'fb_ads_landing_page' => $fb_ads_landing_page,
+    ];
+}
+
+function theme_render_email_url_line($label, $url) {
+    $url = esc_url_raw($url);
+
+    if (!$url) {
+        return '<p><strong>' . esc_html($label) . ':</strong> </p>';
+    }
+
+    return '<p><strong>' . esc_html($label) . ':</strong> <a href="' . esc_url($url) . '" target="_blank">' . esc_html($url) . '</a></p>';
+}
+
+function theme_get_fb_ads_tracking_email_html() {
+    $tracking = theme_get_fb_ads_tracking_data_from_post();
+
+    return ''
+        . '<hr>'
+        . '<h3>Facebook Ads Tracking</h3>'
+        . '<p><strong>Facebook Ads:</strong> ' . esc_html($tracking['facebook_ads']) . '</p>'
+        . theme_render_email_url_line('First Landing Page', $tracking['first_landing_page'])
+        . theme_render_email_url_line('Facebook Ads Landing Page', $tracking['fb_ads_landing_page']);
+}
+```
+
+邮件正文里只需要加入：
+
+```php
+. theme_get_fb_ads_tracking_email_html()
+```
+
+如果你的项目已经使用 `evodek_get_fb_ads_tracking_email_html()` 这个函数名，也可以继续沿用原来的命名。
+
 ## 第四步：在 PHP 邮件函数中接收字段
 
 在处理表单提交的 PHP 函数中，添加以下字段接收代码。
@@ -599,7 +780,7 @@ Facebook Ads: No
 
 ## 测试时的注意事项
 
-因为本方案使用了浏览器的 `localStorage`，测试时需要注意：
+因为本方案会使用浏览器的 `sessionStorage`，部分旧版本也可能使用 `localStorage`，测试时需要注意：
 
 如果你已经访问过带有 `fb_ads=1` 的链接，当前浏览器会一直记住 `Facebook Ads: Yes`。
 
@@ -654,7 +835,7 @@ utm_source=facebook&utm_medium=paid_social&utm_campaign=xxx&utm_content=xxx
 
 可以。
 
-因为广告标记会保存到 `localStorage`。
+因为广告标记会保存到 `sessionStorage`，复杂表单还可以通过 PHP Session 做服务器端兜底。
 
 只要用户使用同一个浏览器，在没有清除浏览器数据的情况下，后续进入 Contact 页面提交表单，仍然可以识别。
 
@@ -664,7 +845,7 @@ utm_source=facebook&utm_medium=paid_social&utm_campaign=xxx&utm_content=xxx
 
 不能。
 
-`localStorage` 只保存在当前浏览器和当前设备中。
+`sessionStorage` / `localStorage` 只保存在当前浏览器和当前设备中。
 
 ---
 
@@ -716,3 +897,34 @@ Submitted Page URL
 7. 如果表单使用独立 JS 且手动 `new FormData()`，记得把 `facebook_ads`、`first_landing_page`、`fb_ads_landing_page` 手动 `append()` 进去。
 8. 修改独立 JS 后，更新版本号，例如 `?v=1.0.4`，或使用 `filemtime()` 自动刷新版本。
 9. 使用无痕窗口进行测试。
+
+
+---
+
+## 最终检查清单
+
+把这套方案复用到其他网站时，建议逐项检查：
+
+1. Facebook / Meta 广告链接是否带有 `fb_ads=1`。
+2. 主题是否已经启用 PHP Session。
+3. `functions.php` 是否有服务器端兜底记录逻辑。
+4. 全站 `wp_footer` 脚本是否能正常输出。
+5. 表单隐藏字段是否存在，或者是否能自动注入。
+6. 所有邮件正文是否调用统一的 Facebook Ads 邮件输出函数。
+7. 普通 Ajax 表单是否使用 `serializeArray()` 或 `FormData(form)`。
+8. 手动 `new FormData()` 的表单是否手动 append 了 3 个字段。
+9. 独立 JS 更新后，是否修改版本号或使用 `filemtime()`。
+10. 是否用无痕窗口分别测试广告流量和普通流量。
+
+---
+
+## 安全提醒
+
+如果你的 `functions.php` 中包含 SMTP 邮箱、授权码、API Key 等敏感信息，不要上传到公开 GitHub 仓库。
+
+公开示例代码时建议替换成占位符：
+
+```php
+$phpmailer->Username = 'your-email@example.com';
+$phpmailer->Password = 'your-smtp-app-password';
+```
