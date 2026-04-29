@@ -52,12 +52,16 @@
     }
 
     .page {
-      max-width: 1180px;
+      width: 100%;
+      max-width: 1280px;
       margin: 0 auto;
-      padding: 32px 20px 72px;
+      padding: 32px 24px 72px;
     }
 
     .hero {
+      width: 100%;
+      max-width: 1180px;
+      margin: 0 auto;
       background: linear-gradient(135deg, var(--primary), #8b35a7);
       color: #fff;
       padding: 56px 42px;
@@ -112,10 +116,12 @@
     }
 
     .layout {
+      width: 100%;
+      max-width: 1180px;
+      margin: 28px auto 0;
       display: grid;
-      grid-template-columns: 280px 1fr;
-      gap: 26px;
-      margin-top: 28px;
+      grid-template-columns: 240px minmax(0, 1fr);
+      gap: 24px;
       align-items: start;
     }
 
@@ -152,10 +158,12 @@
     main {
       display: grid;
       gap: 22px;
+      min-width: 0;
     }
 
     section,
     .card {
+      min-width: 0;
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -240,6 +248,8 @@
 
     .code-block {
       position: relative;
+      max-width: 100%;
+      min-width: 0;
       margin: 16px 0;
       border-radius: 16px;
       overflow: hidden;
@@ -274,6 +284,7 @@
     }
 
     pre {
+      max-width: 100%;
       margin: 0;
       padding: 18px;
       overflow: auto;
@@ -371,6 +382,11 @@
     @media (max-width: 560px) {
       .page {
         padding: 18px 14px 56px;
+      }
+
+      .hero,
+      .layout {
+        max-width: 100%;
       }
 
       .hero h1 {
