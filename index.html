@@ -427,6 +427,7 @@
         <a href="#functions">functions.php 代码</a>
         <a href="#form">表单隐藏字段</a>
         <a href="#ajax">Ajax 提交</a>
+        <a href="#custom-formdata">特殊表单 / JS 缓存</a>
         <a href="#php">PHP 邮件处理</a>
         <a href="#test">测试方法</a>
         <a href="#faq">常见问题</a>
@@ -709,6 +710,164 @@ function theme_output_fb_ads_tracking_script() {
           </div>
         </section>
 
+
+        <section id="custom-formdata">
+          <h2>七补充：特殊表单与 JS 缓存处理</h2>
+          <p>有些复杂表单不是直接提交整个 <code>&lt;form&gt;</code>，也不是使用 <code>serializeArray()</code>，而是在独立 JS 文件中手动创建 <code>new FormData()</code> 并逐个 <code>append()</code> 字段。免费样品页这类多步骤表单通常就是这种情况。</p>
+
+          <div class="note warning">
+            这种写法不会自动提交页面上的隐藏字段。即使表单里已经存在 <code>facebook_ads</code>、<code>first_landing_page</code>、<code>fb_ads_landing_page</code>，如果 JS 没有手动 <code>append()</code>，后台仍然收不到这些字段。
+          </div>
+
+          <h3>1. 手动 FormData 表单需要追加 Facebook Ads 字段</h3>
+          <p>可以先在独立 JS 文件中增加一个读取追踪数据的方法：</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>读取 Facebook Ads 追踪数据</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>function getFbAdsTrackingData() {
+  function getFieldValue(fieldName) {
+    const field = document.querySelector(`[name="${fieldName}"], #${fieldName}`);
+    return field ? field.value : '';
+  }
+
+  const globalTracking = window.evodekFbAdsTracking || {};
+
+  return {
+    facebook_ads:
+      getFieldValue('facebook_ads') ||
+      globalTracking.facebook_ads ||
+      sessionStorage.getItem('facebook_ads') ||
+      localStorage.getItem('facebook_ads') ||
+      'No',
+
+    first_landing_page:
+      getFieldValue('first_landing_page') ||
+      globalTracking.first_landing_page ||
+      sessionStorage.getItem('first_landing_page') ||
+      localStorage.getItem('first_landing_page') ||
+      window.location.href,
+
+    fb_ads_landing_page:
+      getFieldValue('fb_ads_landing_page') ||
+      globalTracking.fb_ads_landing_page ||
+      sessionStorage.getItem('fb_ads_landing_page') ||
+      localStorage.getItem('fb_ads_landing_page') ||
+      ''
+  };
+}</code></pre>
+          </div>
+
+          <p>然后在构建 Ajax <code>FormData</code> 时追加这 3 个字段：</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>手动 append 追踪字段</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>const fbAdsTracking = getFbAdsTrackingData();
+
+formData.append('facebook_ads', fbAdsTracking.facebook_ads === 'Yes' ? 'Yes' : 'No');
+formData.append('first_landing_page', fbAdsTracking.first_landing_page || '');
+formData.append('fb_ads_landing_page', fbAdsTracking.fb_ads_landing_page || '');</code></pre>
+          </div>
+
+          <h3>2. 免费样品页 buildAjaxFormData 示例</h3>
+          <div class="code-block">
+            <div class="code-title">
+              <span>evodek-sample-request.js</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>function buildAjaxFormData(payload) {
+  const formData = new FormData();
+
+  formData.append('action', 'evodek_submit_sample_request');
+  formData.append('sample_request_nonce', ajaxNonce);
+
+  formData.append('first_name', payload.first_name || '');
+  formData.append('last_name', payload.last_name || '');
+  formData.append('phone', payload.phone || '');
+  formData.append('email', payload.email || '');
+  formData.append('message', payload.message || '');
+
+  formData.append('page_url', window.location.href);
+  formData.append('user_agent', navigator.userAgent || '');
+
+  const fbAdsTracking = getFbAdsTrackingData();
+  formData.append('facebook_ads', fbAdsTracking.facebook_ads === 'Yes' ? 'Yes' : 'No');
+  formData.append('first_landing_page', fbAdsTracking.first_landing_page || '');
+  formData.append('fb_ads_landing_page', fbAdsTracking.fb_ads_landing_page || '');
+
+  return formData;
+}</code></pre>
+          </div>
+
+          <h3>3. 不同提交方式的处理区别</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>表单提交方式</th>
+                <th>是否自动带隐藏字段</th>
+                <th>是否需要手动 append</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>普通表单提交</td>
+                <td>是</td>
+                <td>否</td>
+              </tr>
+              <tr>
+                <td><code>serializeArray()</code></td>
+                <td>是</td>
+                <td>否</td>
+              </tr>
+              <tr>
+                <td><code>FormData(form)</code></td>
+                <td>是</td>
+                <td>否</td>
+              </tr>
+              <tr>
+                <td><code>new FormData()</code> 后逐个 <code>append()</code></td>
+                <td>否</td>
+                <td>是</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>4. 修改独立 JS 后要更新版本号，防止缓存</h3>
+          <p>如果修改了 <code>evodek-sample-request.js</code>，浏览器、缓存插件或 CDN 可能还会加载旧文件。最简单的处理方式是修改 URL 后面的版本号：</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>手动更新版本号</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>&lt;script src="&lt;?php echo esc_url( get_theme_file_uri('js/evodek-sample-request.js?v=1.0.4') ); ?&gt;"&gt;&lt;/script&gt;</code></pre>
+          </div>
+
+          <p>更推荐使用 <code>filemtime()</code>，每次 JS 文件更新后自动生成新版本号：</p>
+
+          <div class="code-block">
+            <div class="code-title">
+              <span>自动版本号</span>
+              <button class="copy-btn" data-copy>复制</button>
+            </div>
+            <pre><code>&lt;?php
+$sample_js_file = 'js/evodek-sample-request.js';
+$sample_js_path = get_theme_file_path($sample_js_file);
+$sample_js_ver  = file_exists($sample_js_path) ? filemtime($sample_js_path) : '1.0.0';
+?&gt;
+&lt;script src="&lt;?php echo esc_url( get_theme_file_uri($sample_js_file) . '?v=' . $sample_js_ver ); ?&gt;"&gt;&lt;/script&gt;</code></pre>
+          </div>
+
+          <div class="note success">
+            上传新版 JS 后，建议检查页面源码中的 <code>v=</code> 是否变化，并使用无痕窗口测试。若网站启用了缓存插件或 CDN，也要清理对应缓存。
+          </div>
+        </section>
+
         <section id="php">
           <h2>八、在 PHP 邮件函数中接收并输出字段</h2>
 
@@ -859,7 +1018,12 @@ Submitted Page URL: https://www.example.com/contact-us/</code></pre>
             </div>
             <pre><code>localStorage.removeItem('facebook_ads');
 localStorage.removeItem('first_landing_page');
-localStorage.removeItem('fb_ads_landing_page');</code></pre>
+localStorage.removeItem('fb_ads_landing_page');
+
+// 如果你的项目使用 sessionStorage，则执行：
+sessionStorage.removeItem('facebook_ads');
+sessionStorage.removeItem('first_landing_page');
+sessionStorage.removeItem('fb_ads_landing_page');</code></pre>
           </div>
         </section>
 
@@ -891,6 +1055,8 @@ localStorage.removeItem('fb_ads_landing_page');</code></pre>
             <li>确认 Ajax 提交时包含 <code>page_url</code>。</li>
             <li>在 PHP 邮件函数中接收字段。</li>
             <li>在邮件正文中输出 Facebook 来源信息。</li>
+            <li>如果表单使用独立 JS 且手动 <code>new FormData()</code>，记得把 Facebook Ads 字段手动 <code>append()</code> 进去。</li>
+            <li>修改独立 JS 后，更新版本号，例如 <code>?v=1.0.4</code>，或使用 <code>filemtime()</code> 自动刷新版本。</li>
             <li>使用无痕窗口进行测试。</li>
           </ol>
 

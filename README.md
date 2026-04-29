@@ -276,6 +276,190 @@ jQuery(function($){
 
 ---
 
+---
+
+## 第三步补充：手动 `new FormData()` 的表单需要额外处理
+
+有些复杂表单并不是直接提交整个 `<form>`，也不是用：
+
+```js
+var formData = $form.serializeArray();
+```
+
+而是像免费样品页这种逻辑，在独立 JS 文件中手动创建：
+
+```js
+const formData = new FormData();
+```
+
+然后逐个添加字段：
+
+```js
+formData.append('action', 'evodek_submit_sample_request');
+formData.append('first_name', payload.first_name || '');
+formData.append('email', payload.email || '');
+```
+
+这种写法需要特别注意：
+
+> 即使页面里已经有隐藏字段，如果 JS 没有把这些字段 `append()` 进去，Ajax 请求也不会提交这些 Facebook Ads 数据。
+
+### 免费样品页这类表单的推荐处理方式
+
+在独立 JS 文件中增加一个读取追踪数据的方法：
+
+```js
+function getFbAdsTrackingData() {
+  function getFieldValue(fieldName) {
+    const field = document.querySelector(`[name="${fieldName}"], #${fieldName}`);
+    return field ? field.value : '';
+  }
+
+  const globalTracking = window.evodekFbAdsTracking || {};
+
+  return {
+    facebook_ads:
+      getFieldValue('facebook_ads') ||
+      globalTracking.facebook_ads ||
+      sessionStorage.getItem('facebook_ads') ||
+      localStorage.getItem('facebook_ads') ||
+      'No',
+
+    first_landing_page:
+      getFieldValue('first_landing_page') ||
+      globalTracking.first_landing_page ||
+      sessionStorage.getItem('first_landing_page') ||
+      localStorage.getItem('first_landing_page') ||
+      window.location.href,
+
+    fb_ads_landing_page:
+      getFieldValue('fb_ads_landing_page') ||
+      globalTracking.fb_ads_landing_page ||
+      sessionStorage.getItem('fb_ads_landing_page') ||
+      localStorage.getItem('fb_ads_landing_page') ||
+      ''
+  };
+}
+```
+
+然后在构建 Ajax `FormData` 时追加这 3 个字段：
+
+```js
+const fbAdsTracking = getFbAdsTrackingData();
+
+formData.append('facebook_ads', fbAdsTracking.facebook_ads === 'Yes' ? 'Yes' : 'No');
+formData.append('first_landing_page', fbAdsTracking.first_landing_page || '');
+formData.append('fb_ads_landing_page', fbAdsTracking.fb_ads_landing_page || '');
+```
+
+完整示例：
+
+```js
+function buildAjaxFormData(payload) {
+  const formData = new FormData();
+
+  formData.append('action', 'evodek_submit_sample_request');
+  formData.append('sample_request_nonce', ajaxNonce);
+
+  formData.append('first_name', payload.first_name || '');
+  formData.append('last_name', payload.last_name || '');
+  formData.append('phone', payload.phone || '');
+  formData.append('email', payload.email || '');
+  formData.append('message', payload.message || '');
+
+  formData.append('page_url', window.location.href);
+  formData.append('user_agent', navigator.userAgent || '');
+
+  const fbAdsTracking = getFbAdsTrackingData();
+  formData.append('facebook_ads', fbAdsTracking.facebook_ads === 'Yes' ? 'Yes' : 'No');
+  formData.append('first_landing_page', fbAdsTracking.first_landing_page || '');
+  formData.append('fb_ads_landing_page', fbAdsTracking.fb_ads_landing_page || '');
+
+  return formData;
+}
+```
+
+### 判断规则
+
+| 表单提交方式 | 是否自动带隐藏字段 | 是否需要手动 append |
+|---|---:|---:|
+| 普通表单提交 | 是 | 否 |
+| `serializeArray()` | 是 | 否 |
+| `FormData(form)` | 是 | 否 |
+| `new FormData()` 后逐个 `append()` | 否 | 是 |
+
+---
+
+## 第三步补充：更新独立 JS 文件后要处理缓存
+
+如果你修改了独立 JS 文件，例如：
+
+```txt
+/js/evodek-sample-request.js
+```
+
+浏览器或缓存插件可能仍然加载旧版本，导致新加的 Facebook Ads 字段没有生效。
+
+### 简单做法：手动修改版本号
+
+原来可能是：
+
+```php
+<script src="<?php echo esc_url( get_theme_file_uri('js/evodek-sample-request.js?v=1.0.3') ); ?>"></script>
+```
+
+修改 JS 后，把版本号改成新的：
+
+```php
+<script src="<?php echo esc_url( get_theme_file_uri('js/evodek-sample-request.js?v=1.0.4') ); ?>"></script>
+```
+
+### 推荐做法：使用 `filemtime()` 自动刷新版本
+
+更推荐用文件修改时间作为版本号：
+
+```php
+<?php
+$sample_js_file = 'js/evodek-sample-request.js';
+$sample_js_path = get_theme_file_path($sample_js_file);
+$sample_js_ver  = file_exists($sample_js_path) ? filemtime($sample_js_path) : '1.0.0';
+?>
+<script src="<?php echo esc_url( get_theme_file_uri($sample_js_file) . '?v=' . $sample_js_ver ); ?>"></script>
+```
+
+这样每次你上传并覆盖 `evodek-sample-request.js` 后，只要文件修改时间变了，前端就会自动加载新版 JS。
+
+### WordPress enqueue 写法
+
+如果你的主题使用 `wp_enqueue_script()`，可以这样写：
+
+```php
+add_action('wp_enqueue_scripts', 'theme_enqueue_sample_request_script');
+
+function theme_enqueue_sample_request_script() {
+    $file = 'js/evodek-sample-request.js';
+    $path = get_theme_file_path($file);
+    $ver  = file_exists($path) ? filemtime($path) : '1.0.0';
+
+    wp_enqueue_script(
+        'evodek-sample-request',
+        get_theme_file_uri($file),
+        [],
+        $ver,
+        true
+    );
+}
+```
+
+### 测试时的建议
+
+修改 JS 后建议同时做这几件事：
+
+1. 页面源码中确认 JS 地址后面的 `v=` 已经变化。
+2. 浏览器按 `Ctrl + F5` 强制刷新。
+3. 使用无痕窗口测试。
+4. 如果网站有缓存插件或 CDN，清理页面缓存和静态资源缓存。
+
 ## 第四步：在 PHP 邮件函数中接收字段
 
 在处理表单提交的 PHP 函数中，添加以下字段接收代码。
@@ -429,6 +613,11 @@ Facebook Ads: No
 localStorage.removeItem('facebook_ads');
 localStorage.removeItem('first_landing_page');
 localStorage.removeItem('fb_ads_landing_page');
+
+// 如果你的项目使用 sessionStorage，则执行：
+sessionStorage.removeItem('facebook_ads');
+sessionStorage.removeItem('first_landing_page');
+sessionStorage.removeItem('fb_ads_landing_page');
 ```
 
 ---
@@ -524,4 +713,6 @@ Facebook Ads Landing Page
 Submitted Page URL
 ```
 
-7. 使用无痕窗口进行测试。
+7. 如果表单使用独立 JS 且手动 `new FormData()`，记得把 `facebook_ads`、`first_landing_page`、`fb_ads_landing_page` 手动 `append()` 进去。
+8. 修改独立 JS 后，更新版本号，例如 `?v=1.0.4`，或使用 `filemtime()` 自动刷新版本。
+9. 使用无痕窗口进行测试。
